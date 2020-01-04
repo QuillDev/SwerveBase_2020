@@ -1,28 +1,25 @@
 package SKCommon.swerve;
 
+import com.ctre.phoenix.motorcontrol.ControlMode;
+import com.ctre.phoenix.motorcontrol.can.TalonSRX;
+import com.ctre.phoenix.motorcontrol.can.VictorSPX;
+
+import SKCommon.Utils.qMath;
 import edu.wpi.first.wpilibj.AnalogInput;
-import edu.wpi.first.wpilibj.Encoder;
 import edu.wpi.first.wpilibj.RobotController;
-import edu.wpi.first.wpilibj.Timer;
-import edu.wpi.first.wpilibj.VictorSP;
 import edu.wpi.first.wpilibj.controller.ProfiledPIDController;
 import edu.wpi.first.wpilibj.trajectory.TrapezoidProfile;
 import edu.wpi.first.wpilibj.trajectory.TrapezoidProfile.Constraints;
 import edu.wpi.first.wpiutil.math.MathUtil;
-import frc.robot.Map;
 
 public class SwerveModule {
-    Timer test = new Timer();
-
     // create the parts of the swerve that we can actually control [Motors,
     // Encoders, etc]
-    private VictorSP driveMotor;
-    private VictorSP angleMotor;
+    private TalonSRX driveMotor;
+    private VictorSPX steerMotor;
 
     // encoder input for the STEERING GEAR
     private AnalogInput steerEncoder;
-
-    private Encoder driveEncoder;
 
     // add steeroffset int
     private double steerOffset;
@@ -30,8 +27,6 @@ public class SwerveModule {
     // Add a placeholder for the name of the module
     private String moduleName = "Default";
 
-    //Static value for radians in a circle
-    private final double unitRads = 2.0 * Math.PI;
 
     // Constants for PID controller
     private final double Kp = 1;
@@ -39,7 +34,7 @@ public class SwerveModule {
     private final double Kd = 0;
 
     // Constraints for Profiled pid controller
-    Constraints steerConstraints = new TrapezoidProfile.Constraints(unitRads, unitRads);
+    Constraints steerConstraints = new TrapezoidProfile.Constraints(qMath.twoPI, qMath.twoPI);
 
     //Create a new profiled PIDController
     private final ProfiledPIDController steerPID = new ProfiledPIDController(Kp, Ki, Kd, steerConstraints);
@@ -50,16 +45,20 @@ public class SwerveModule {
     /**
      * 
      * @param driveMotor int port for drive motor 
-     * @param angleMotor int port for angle motor
+     * @param steerMotor int port for angle motor
      * @param steerEncoder int port for steer encoder
      * @param steerOffset double offset for adjusting steering inconsistencies
      */
-    public SwerveModule(int driveMotor, int angleMotor, int steerEncoder, double steerOffset) {
+    public SwerveModule(int driveMotor, int steerMotor, int steerEncoder, double steerOffset) {
         //create our local instances of the pieces within our modules
 
         //setup angle motors
-        this.driveMotor = new VictorSP(driveMotor);
-        this.angleMotor = new VictorSP(angleMotor);
+        this.driveMotor = new TalonSRX(driveMotor);
+        this.steerMotor = new VictorSPX(steerMotor);
+
+        //default controllers
+        this.driveMotor.configFactoryDefault();
+        this.steerMotor.configFactoryDefault();
 
         //setup steer encoder as an AnalogInput
         this.steerEncoder = new AnalogInput(steerEncoder);
@@ -70,7 +69,7 @@ public class SwerveModule {
         this.steerOffset = Math.toRadians(steerOffset);
 
         //enable continuous input from 0 to 2 pi radians
-        steerPID.enableContinuousInput(0, 2*Math.PI);
+        steerPID.enableContinuousInput(0, qMath.twoPI);
     }
 
 
@@ -78,16 +77,16 @@ public class SwerveModule {
     //NOTE: In Radians, maybe convert to degrees?
     public double readAngle() {
         //get the angle by reading the output voltage of the encoder and turn it to a radian output
-        double angle = (1.0 - steerEncoder.getVoltage() / RobotController.getVoltage5V()) * 2.0 * Math.PI + steerOffset;
+        double angle = (1.0 - steerEncoder.getVoltage() / RobotController.getVoltage5V()) * qMath.twoPI + steerOffset;
         
         //to prevent overadding [Angles over 360 degrees / 2pi radians] we modulo the result by 2
-        angle %= 2.0 * Math.PI;
+        angle %= qMath.twoPI;
         
         //if the angle is less than 0 [AKA negative] add 2pi radians in order to get the compliment
         if(angle < 0.0) {
 
             //add 2pi radians to the angle
-            angle += 2.0 * Math.PI;
+            angle += qMath.twoPI;
         }
         return angle;
     }
@@ -114,7 +113,7 @@ public class SwerveModule {
      * @return returns inverse angles as positive values
      */
     public double toPositive(double angle){
-        return (angle < 0) ? ( angle += 2.0 * Math.PI ) : angle;
+        return (angle < 0) ? ( angle += qMath.twoPI ) : angle;
     }
     /**
      * @return the lowest amount of degrees it will have to travel from the goal given the current angle
@@ -127,34 +126,12 @@ public class SwerveModule {
             optimalOutput = thetaProvisional;
         }
         else if(thetaProvisional > Math.PI){
-            optimalOutput = thetaProvisional - 2.0 * Math.PI;
+            optimalOutput = thetaProvisional - qMath.twoPI;
         } else {
-            optimalOutput = thetaProvisional + 2.0 * Math.PI;
+            optimalOutput = thetaProvisional + qMath.twoPI;
         }
 
         return optimalOutput;
-    }
-    //Returns in inches
-    public double readDistanceInches(){
-        return driveEncoder.getDistance() * Map.wheelCircumference * Map.gearRatio;
-    }
-
-    //Return distance in feet
-    public double readDistanceFeet(){
-        return readDistanceInches()/12;
-    }
-
-    //read position
-    public int readPosition() {
-        return driveEncoder.get();
-    }
-
-    /**
-     * @param speed speed to set the drive motor to
-     */
-    public void setDrive(double speed){
-        //set the drive motor to the percentage speed specified
-        driveMotor.set(speed);
     }
 
     /**
@@ -165,11 +142,11 @@ public class SwerveModule {
     public void driveSimple(double speed, double goalAngle){
 
         //calculates the speed to set the motor to using the PID formula taking into the account the current angle position and the setpoint [goal]
-        angleMotor.set(MathUtil.clamp(steerPID.calculate(readAngle(), calculateBestGoal(goalAngle)), -1, 1));
+        steerMotor.set(ControlMode.PercentOutput, MathUtil.clamp(steerPID.calculate(readAngle(), calculateBestGoal(goalAngle)), -1, 1));
 
         //Solve the wonderful 180 issue in the cleanest possible way @Ether
         //set the speed, if the motor controller is inverse set it to inverse
-        setDrive( isInverse ? -speed : speed );
+        driveMotor.set(ControlMode.PercentOutput, (isInverse ? -1 : 1) * speed);
     }
 
     /**

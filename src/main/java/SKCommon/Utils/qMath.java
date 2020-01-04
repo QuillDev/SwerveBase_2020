@@ -4,6 +4,9 @@ public final class qMath {
     private qMath() {
         throw new AssertionError("utility class");
     }
+
+    //MathConstant
+    public static final double twoPI = Math.PI * 2.0;
     /**
      * 
      * @param a a value to use in pythag 

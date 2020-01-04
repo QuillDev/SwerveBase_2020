@@ -5,9 +5,6 @@ import edu.wpi.first.wpilibj.drive.Vector2d;
 
 public class Map{
 
-    //TODO ADJUST THIS FOR THE LOVE OF GOD
-    public final static double gearRatio = 6.67;
-
     //dimensions of the robot stored globally
     //needed in the kinematic equations from swerve
     public final static double TRACKWIDTH = 30; //distance from the centers of the wheels width wise 
@@ -22,7 +19,12 @@ public class Map{
     //Wheel values [Wheel Diameter and Circumference] 
     public final static double wheelDiameter = 4;
     public final static double wheelDiameterMetres = qMath.feetToMetres(4/12);
-    public final static double wheelCircumference = wheelDiameter * Math.PI;
+    public final static double wheelCircumferenceInches = wheelDiameter * Math.PI;
+    
+    //Gear Ratio from CIM to motor driving
+    public final static double gearRatio = 6.67;
+    public final static double pulsesPerRevolution = gearRatio * 265;
+    public final static double distancePerPulseInches = wheelCircumferenceInches / pulsesPerRevolution;
 
     //angle offsets [ INPUT VALUES IN DEGREES!!! ]
     public final static double kflAngleOffset = Math.toRadians(0.0);
